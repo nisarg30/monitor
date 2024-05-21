@@ -96,7 +96,7 @@ let fetchTask;
 async function fetchDataWithDelay() {
     await xyz("NIFTY1!", '5');
 }
-fetchDataWithDelay()
+
 cron.schedule('0 9 * * 1-5', () => {
     console.log('Starting fetchDataWithDelay at 9 AM IST on weekdays');
     fetchTask = fetchDataWithDelay();
