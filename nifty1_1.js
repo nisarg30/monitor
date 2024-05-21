@@ -78,13 +78,12 @@ const xyz = async (stockname, tf) => {
     chart.onUpdate(async () => {
         console.log('Plot values chart : ', ConfirmationEntry.periods[0], chart.periods[0]);
         if (ConfirmationEntry.periods[0] == undefined) return;
-        writeCandlestickDataToServer(chart.infos.name, ConfirmationEntry.periods.splice(0, 200), chart.periods.splice(0, 200), '1', 1);
+
         if (ConfirmationEntry.periods[1].Shapes === 1) {
             writeCandlestickDataToServer(chart.infos.name, ConfirmationEntry.periods.splice(0, 200), chart.periods.splice(0, 200), '1', 1);
         } else if (ConfirmationEntry.periods[1].Shapes_2 === 1) {
             writeCandlestickDataToServer(chart.infos.name, ConfirmationEntry.periods.splice(0, 200), chart.periods.splice(0, 200), '1', 0);
         }
-        client.end();
     });
 
     return client.end();
