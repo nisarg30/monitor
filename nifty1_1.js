@@ -61,8 +61,8 @@ async function writeCandlestickDataToServer(stockName, confirmationPeriods, char
 const xyz = async (stockname, tf) => {
     console.log(stockname, tf);
     const client = new TradingView.Client({
-        token: 'xajjrhtxu2peve0li7lfje3vpmiho4b0',
-        signature: 'v2:SqjPdUb4iLLB/WJW3tlMYIZFOlcXT6f2oceM/5bCNlw=',
+        // token: 'xajjrhtxu2peve0li7lfje3vpmiho4b0',
+        // signature: 'v2:SqjPdUb4iLLB/WJW3tlMYIZFOlcXT6f2oceM/5bCNlw=',
     });
 
     const chart = new client.Session.Chart();
