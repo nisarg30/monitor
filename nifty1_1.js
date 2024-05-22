@@ -3,7 +3,11 @@ const cron = require('node-cron');
 const TradingView = require('@mathieuc/tradingview');
 const axios = require('axios');
 const mongoose = require('mongoose');
-const storage = require('./model.js')
+const storage = require('./model.js');
+
+let isFetching = false;  // Global flag to indicate fetching status
+let client = null;       // Global client variable
+let initialLoadTimeout = null; // Timeout for initial load check
 
 async function connectToDatabase() {
     try {
@@ -13,7 +17,7 @@ async function connectToDatabase() {
         const db = mongoose.connection;
         db.on('error', console.error.bind(console, 'connection error:'));
         db.once('open', () => {
-        console.log('Connected to the database successfully!');
+            console.log('Connected to the database successfully!');
         });
     } catch (error) {
         console.error('Error connecting to the database:', error);
@@ -42,12 +46,13 @@ async function writeCandlestickDataToServer(stockName, confirmationPeriods, char
         });
         console.log('CSV data sent successfully to the server');
         console.log('Server response:', response.data);
-        var quey = stockName + '_' + tf;
+
+        const quey = stockName + '_' + tf;
         const filter = { stockname: quey };
         const logEntry = {
-            time : chartPeriods[0].time,
-            direction : dir,
-            result : response.data[0]
+            time: chartPeriods[0].time,
+            direction: dir,
+            result: response.data[0]
         };
         const update = { $push: { log: logEntry } };
         const result = await storage.updateOne(filter, update);
@@ -60,7 +65,7 @@ async function writeCandlestickDataToServer(stockName, confirmationPeriods, char
 
 const xyz = async (stockname, tf) => {
     console.log(stockname, tf);
-    const client = new TradingView.Client({
+    client = new TradingView.Client({
         // token: 'xajjrhtxu2peve0li7lfje3vpmiho4b0',
         // signature: 'v2:SqjPdUb4iLLB/WJW3tlMYIZFOlcXT6f2oceM/5bCNlw=',
     });
@@ -71,42 +76,65 @@ const xyz = async (stockname, tf) => {
         range: 10000000,
     });
 
-    const indicator = await TradingView.getIndicator('USER;f691a941ff2d44fc8b6ac9020465b2b4');
+    const restartFunction = async () => {
+        console.log('Restarting xyz due to no updates within timeout period');
+        await client.end();  
+        if (isFetching) {
+            await xyz(stockname, tf);
+        }
+    };
 
+    initialLoadTimeout = setTimeout(restartFunction, 10000);
+
+    let last = null;
+    const indicator = await TradingView.getIndicator('USER;f691a941ff2d44fc8b6ac9020465b2b4');
     const ConfirmationEntry = new chart.Study(indicator);
 
     chart.onUpdate(async () => {
+        if (!isFetching) {
+            await client.end();
+            return;
+        }
+
+        clearTimeout(initialLoadTimeout);
+        initialLoadTimeout = null;
+
         console.log('Plot values chart : ', ConfirmationEntry.periods[0], chart.periods[0]);
         if (ConfirmationEntry.periods[0] == undefined) return;
 
-        if (ConfirmationEntry.periods[1].Shapes === 1) {
-            writeCandlestickDataToServer(chart.infos.name, ConfirmationEntry.periods.splice(0, 200), chart.periods.splice(0, 200), '1', 1);
-        } else if (ConfirmationEntry.periods[1].Shapes_2 === 1) {
-            writeCandlestickDataToServer(chart.infos.name, ConfirmationEntry.periods.splice(0, 200), chart.periods.splice(0, 200), '1', 0);
+        if (ConfirmationEntry.periods[1].Shapes === 1 && last != chart.periods[1].time) {
+            last = chart.periods[1].time;
+            await writeCandlestickDataToServer(chart.infos.name, ConfirmationEntry.periods.splice(0, 200), chart.periods.splice(0, 200), '1', 1);
+        } else if (ConfirmationEntry.periods[1].Shapes_2 === 1 && last != chart.periods[1].time) {
+            last = chart.periods[1].time;
+            await writeCandlestickDataToServer(chart.infos.name, ConfirmationEntry.periods.splice(0, 200), chart.periods.splice(0, 200), '1', 0);
         }
     });
-
-    return client.end();
 };
 
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-let fetchTask;
-
 async function fetchDataWithDelay() {
+    isFetching = true;
     await xyz("NIFTY1!", '1');
 }
 
-cron.schedule('0 9 * * 1-5', () => {
-    console.log('Starting fetchDataWithDelay at 9 AM IST on weekdays');
-    fetchTask = fetchDataWithDelay();
+// fetchDataWithDelay();
+
+cron.schedule('00 09 * * 1-5', () => {
+    console.log('Starting fetchDataWithDelay at 9:00 AM IST on weekdays');
+    fetchDataWithDelay();
 }, {
     timezone: 'Asia/Kolkata'
 });
 
-cron.schedule('45 15 * * 1-5', () => {
-    console.log('Stopping fetchDataWithDelay at 3:45 PM IST on weekdays');
-    fetchTask = null; 
+cron.schedule('40 15 * * 1-5', () => {
+    console.log('Stopping fetchDataWithDelay at 3:40 PM IST on weekdays');
+    isFetching = false;  
+    if (client) {
+        client.end(); 
+    }
+    if (initialLoadTimeout) {
+        clearTimeout(initialLoadTimeout);  
+    }
 }, {
     timezone: 'Asia/Kolkata'
 });
